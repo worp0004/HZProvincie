@@ -1,6 +1,7 @@
 import * as Cesium from "cesium";
 import FlyCamera from "./fly-camera";
 
+import { setupObjectDevTest } from "$lib/objects/objectDevTest"
 import { FeatureInfoHandler } from "./feature-info-handler";
 import { get } from "svelte/store";
 import { MapCore } from "$lib/map-core/map-core";
@@ -86,6 +87,10 @@ export class Map extends MapCore {
 		this.viewer = this.createViewer(container, addDefaultBaselayer);
 		this.camera = this.viewer.camera;
 		this.viewer.forceResize();
+
+		if (import.meta.env.DEV) {
+    		setupObjectDevTest(this.viewer);
+		}
 
 		this.featureInfoHandler = new FeatureInfoHandler(this);
 
