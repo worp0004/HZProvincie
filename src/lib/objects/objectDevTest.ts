@@ -61,7 +61,7 @@ export function setupObjectDevTest(
 						"Testgebouw",
 
 					modelUrl:
-						"/models/Box.glb",
+						"/models/molen_11230.glb",
 
 					longitude:
 						longitude,
@@ -77,6 +77,10 @@ export function setupObjectDevTest(
 
 					heading:
 						heading,
+                        
+                    pitch: 90,
+		            
+                    roll: 0,    
 
 					shadows:
 						true
