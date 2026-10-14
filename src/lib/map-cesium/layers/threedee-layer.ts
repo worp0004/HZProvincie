@@ -7,7 +7,6 @@ import LayerControlHeight from "$lib/components/layer-controls/LayerControlHeigh
 import LayerControlTheme from "$lib/components/layer-controls/LayerControlTheme/LayerControlTheme.svelte";
 import LayerControlClip from "$lib/components/layer-controls/LayerControlClip/LayerControlClip.svelte";
 import LayerControlPointCloudFilter from "$lib/components/layer-controls/LayerControlPointCloud/LayerControlPointCloudFilter.svelte";
-import LayerControlDistance from "$lib/components/layer-controls/LayerControlDistance/LayerControlDistance.svelte";
 
 import type { Map } from "../map";
 import { ClipSlider } from "../../components/layer-controls/LayerControlClip/clip-slider";
@@ -52,6 +51,14 @@ export class ThreedeeLayer extends PrimitiveLayer {
 
 	private addListeners(): void {
 		this.unsubscribers.push(
+			this.distanceRings.subscribe((rings) => {
+				if (!get(this.distanceActive)) return;
+				this.source?.customShader?.setUniform(
+					"u_rings",
+					new Cesium.Cartesian3(rings[0], rings[1], rings[2])
+				);
+				this.map.refresh();
+			}),
 			this.tilesetHeight.subscribe((h) => {
 				this.setHeight(h);
 			}),
@@ -80,16 +87,6 @@ export class ThreedeeLayer extends PrimitiveLayer {
 	}
 
 	private async createLayer(): Promise<void> {
-		if (this.config.settings["enableDistanceAnalysis"]) {
-			this.distanceControl = new CustomLayerControl();
-			this.distanceControl.component = LayerControlDistance;
-			this.distanceControl.props = {
-				center: this.selectedCenter,
-				active: this.distanceActive,
-				onToggle: (on: boolean) => this.toggleDistance(on)
-			};
-			this.addCustomControl(this.distanceControl);
-		}
 		const tileset = await Cesium.Cesium3DTileset.fromUrl(this.config.settings["url"], {
 			shadows:
 				this.config.settings["shadows"] === false
@@ -401,28 +398,30 @@ export class ThreedeeLayer extends PrimitiveLayer {
 
 	public selectedCenter: Writable<Cesium.Cartesian3 | undefined> = writable(undefined);
 	public distanceActive: Writable<boolean> = writable(false);
-	private distanceControl: CustomLayerControl | undefined;
+	public distanceRings: Writable<[number, number, number]> = writable([100, 300, 600]);
 
 	public setDistanceShader(center: Cesium.Cartesian3): void {
 		if (!this.source) return;
 		const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(center, new Cesium.Cartesian3());
+		const r = get(this.distanceRings);
 
 		this.source.customShader = new Cesium.CustomShader({
 			uniforms: {
 				u_center: { type: Cesium.UniformType.VEC3, value: center },
-				u_up: { type: Cesium.UniformType.VEC3, value: up }
+				u_up: { type: Cesium.UniformType.VEC3, value: up },
+				u_rings: { type: Cesium.UniformType.VEC3, value: new Cesium.Cartesian3(r[0], r[1], r[2]) }
 			},
 			fragmentShaderText: `
-			void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
-				vec3 d = fsInput.attributes.positionWC - u_center;
-				d -= dot(d, u_up) * u_up;          // hoogteverschil weghalen
-				float dist = length(d);
-				vec3 c = dist < 100.0 ? vec3(0.85, 0.12, 0.16)
-				       : dist < 300.0 ? vec3(0.99, 0.82, 0.23)
-				       : dist < 600.0 ? vec3(0.14, 0.63, 0.28)
-				       :                vec3(0.06, 0.20, 0.65);
-				material.diffuse = c;
-			}`
+		void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+			vec3 d = fsInput.attributes.positionWC - u_center;
+			d -= dot(d, u_up) * u_up;
+			float dist = length(d);
+			vec3 c = dist < u_rings.x ? vec3(0.85, 0.12, 0.16)
+			       : dist < u_rings.y ? vec3(0.99, 0.82, 0.23)
+			       : dist < u_rings.z ? vec3(0.14, 0.63, 0.28)
+			       :                    vec3(0.06, 0.20, 0.65);
+			material.diffuse = c;
+		}`
 		});
 		this.map.refresh();
 	}

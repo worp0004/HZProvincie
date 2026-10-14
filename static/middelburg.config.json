@@ -53,7 +53,6 @@
             "settings": {
                 "url": "https://api.pdok.nl/kadaster/3d-basisvoorziening/ogc/v1_0/collections/gebouwen/3dtiles",
                 "enableHeightControl": true,
-                "enableDistanceAnalysis": true,
                 "themes": [
                     
                     {
@@ -164,6 +163,14 @@
     },
     "groups": [],
     "tools": [
+           {
+       "id": "analysis",
+       "enabled": true,
+       "settings": {
+           "alias": "Analyse",
+           "layerId": "3"
+       }
+   },
         {
             "id": "layerManager",
             "enabled": true,

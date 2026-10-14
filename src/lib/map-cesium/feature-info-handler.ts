@@ -83,7 +83,7 @@ export class FeatureInfoHandler {
 	): void {
 		//@ts-ignore
 		const layer = this.map.getLayerById(feature.tileset.config_id) as any;
-		if (!layer?.selectedCenter) return; // only layers that support the distance analysis
+		if (!layer?.selectedCenter) return;
 
 		const position = this.map.viewer.scene.pickPosition(location);
 		if (!Cesium.defined(position)) return;
