@@ -25,10 +25,10 @@ const TEST_OBJECT_ID =
 
 const state = {
 	longitude: 3.61389,
-	latitude: 51.49880,
-	height: 10,
-	scale: 20,
-	heading: 0
+    latitude: 51.49880,
+    height: 0,
+    scale: 1,
+    heading: 0
 };
 
 
@@ -61,7 +61,7 @@ export function setupObjectDevTest(
 						"Testgebouw",
 
 					modelUrl:
-						"/models/molen_11230.glb",
+						"/models/NL.IMBAG.Pand.0664100000000789.glb",
 
 					longitude:
 						longitude,
@@ -78,7 +78,7 @@ export function setupObjectDevTest(
 					heading:
 						heading,
                         
-                    pitch: 90,
+                    pitch: 0,
 		            
                     roll: 0,    
 
