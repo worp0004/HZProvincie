@@ -18,6 +18,15 @@ export default defineConfig(({ command, mode }) => {
         CESIUM_BASE_URL: JSON.stringify(cesiumBaseUrl),
         "process.env": process.env
       },
+      server: {
+        proxy: {
+          // The Zeeland tileset server only allows its own viewer (CORS), so the dev server passes the tiles through
+          "/tiles_other": {
+            target: "https://virtueel.zeeland.nl",
+            changeOrigin: true
+          }
+        }
+      },
       plugins: [
         sveltekit(),
         // Copy Cesium Assets, Widgets, and Workers to a static directory.

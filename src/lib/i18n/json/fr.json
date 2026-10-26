@@ -441,7 +441,7 @@
 			"noLayer": "Le calque 3D pour l'analyse n'est pas encore chargé.",
 			"distance": {
 				"title": "Analyse de distance",
-				"hint": "Cliquez sur un bâtiment sur la carte. Vous pouvez ensuite colorer les bâtiments en fonction de leur distance à ce lieu.",
+				"hint": "Cliquez sur un bâtiment sur la carte, ou placez un bâtiment avec l'outil Placer un bâtiment. Vous pouvez ensuite colorer les bâtiments en fonction de leur distance à ce lieu.",
 				"noCenter": "Aucun bâtiment sélectionné.",
 				"centerSet": "Point central sélectionné.",
 				"on": "Analyse de distance activée",
@@ -452,7 +452,32 @@
 				"green": "Vert: jusqu'à (m)",
 				"beyond": "Bleu: au-delà",
 				"reset": "Distances par défaut"
+			},
+			"shadow": {
+				"title": "Ombre",
+				"hint": "Activez les ombres et choisissez une heure pour voir où les bâtiments projettent leur ombre.",
+				"show": "Afficher les ombres",
+				"hour": "Heure"
 			}
+		},
+		"placeBuilding": {
+			"label": "Placer un bâtiment",
+			"building": "Bâtiment",
+			"noBuildings": "Aucun bâtiment dans la configuration.",
+			"loadFailed": "Le modèle n'a pas pu être chargé.",
+			"place": "Placer sur la carte",
+			"clickMap": "Cliquez sur la carte à l'endroit du bâtiment.",
+			"visibility": "Visibilité",
+			"showBuilding": "Afficher le bâtiment placé",
+			"hideUnderneath": "Retirer les bâtiments existants en dessous",
+			"showSurroundings": "Afficher les bâtiments environnants",
+			"position": "Position",
+			"dragHint": "Vous pouvez aussi faire glisser le bâtiment sur la carte.",
+			"longitude": "X (longitude)",
+			"latitude": "Y (latitude)",
+			"height": "Z (hauteur au-dessus du sol, m)",
+			"heading": "Rotation (degrés)",
+			"remove": "Supprimer le bâtiment"
 		}
 	},
 	"errors": {

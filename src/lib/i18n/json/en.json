@@ -444,7 +444,7 @@
 			"noLayer": "The 3D layer for the analysis is not yet loaded.",
 			"distance": {
 				"title": "Distance Analysis",
-				"hint": "Click on a building on the map. You can then color the buildings based on their distance to that location.",
+				"hint": "Click on a building on the map, or place a building with the Place building tool. You can then color the buildings based on their distance to that location.",
 				"noCenter": "No building selected.",
 				"centerSet": "Center point selected.",
 				"on": "Distance Analysis on",
@@ -455,7 +455,32 @@
 				"green": "Green: up to (m)",
 				"beyond": "Blue: beyond",
 				"reset": "Default distances"
+			},
+			"shadow": {
+				"title": "Shadow",
+				"hint": "Turn on shadows and pick a time to see where buildings cast shadow on their surroundings.",
+				"show": "Show shadows",
+				"hour": "Time (hour)"
 			}
+		},
+		"placeBuilding": {
+			"label": "Place building",
+			"building": "Building",
+			"noBuildings": "There are no buildings in the config yet.",
+			"loadFailed": "The model could not be loaded.",
+			"place": "Place on the map",
+			"clickMap": "Click on the map where the building should go.",
+			"visibility": "Visibility",
+			"showBuilding": "Show placed building",
+			"hideUnderneath": "Remove existing buildings underneath",
+			"showSurroundings": "Show surrounding buildings",
+			"position": "Position",
+			"dragHint": "You can also drag the building over the map.",
+			"longitude": "X (longitude)",
+			"latitude": "Y (latitude)",
+			"height": "Z (height above ground, m)",
+			"heading": "Rotation (degrees)",
+			"remove": "Remove building"
 		}
 	},
 	"errors": {

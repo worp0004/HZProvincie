@@ -2,7 +2,7 @@
 	import { getContext, onDestroy } from "svelte";
 	import { get, type Writable } from "svelte/store";
 	import { _ } from "svelte-i18n";
-	import { Button, InlineNotification, Slider } from "carbon-components-svelte";
+	import { Button, Checkbox, InlineNotification, Slider } from "carbon-components-svelte";
 	import { Analytics } from "carbon-icons-svelte";
 
 	import { MapToolMenuOption } from "../MapToolMenuOption";
@@ -124,6 +124,17 @@
 		if (!layer) return;
 		layer.toggleDistance(!$active);
 	}
+
+	// Shadow analysis uses the shadow and time settings of the map itself (same as the Cesium tool)
+	const shadows = map.options.shadows;
+	const dateTime = map.options.dateTime;
+	$: shadowHour = new Date($dateTime).getHours();
+
+	function setShadowHour(hour: number): void {
+		const date = new Date(get(dateTime));
+		date.setHours(hour);
+		dateTime.set(date.getTime());
+	}
 </script>
 
 {#if $selectedTool === tool}
@@ -181,6 +192,24 @@
 					</div>
 				{/if}
 			{/if}
+		</div>
+		<div class="divider" />
+		<div class="section">
+			<div class="label-02">{$_("tools.analysis.shadow.title")}</div>
+			<p class="label-01 hint">{$_("tools.analysis.shadow.hint")}</p>
+			<Checkbox labelText={$_("tools.analysis.shadow.show")} bind:checked={$shadows} />
+			<div class="slider shadow-slider">
+				<Slider
+					labelText={$_("tools.analysis.shadow.hour")}
+					min={0}
+					max={23}
+					step={1}
+					value={shadowHour}
+					disabled={!$shadows}
+					on:input={(e) => setShadowHour(e.detail)}
+					on:change={(e) => setShadowHour(e.detail)}
+				/>
+			</div>
 		</div>
 		<div class="divider" />
 	</div>
@@ -249,6 +278,10 @@
 	}
 
 	.slider :global(.bx--slider-container) {
+		width: 100%;
+	}
+
+	.shadow-slider {
 		width: 100%;
 	}
 

@@ -4,6 +4,8 @@ import { FeatureInfo } from "$lib/map-core/feature-info/feature-info";
 import { FeatureInfoRequestOptions } from "$lib/map-core/feature-info/feature-info-request-options";
 import { FeatureInfoRecord } from "$lib/map-core/feature-info/feature-info-record";
 import { get } from "svelte/store";
+import { _ } from "svelte-i18n";
+import { PlacedBuilding } from "./placed-building";
 
 export class FeatureInfoHandler {
 	public readonly selectedProperty: string = "cesium_selected";
@@ -14,6 +16,7 @@ export class FeatureInfoHandler {
 
 	// Layer (ThreedeeLayer) of the currently selected 3D tile feature, used for the distance analysis
 	private selectedLayer: any;
+	private distanceCenter: Cesium.Cartesian3 | undefined;
 
 	private map: Map;
 
@@ -68,12 +71,21 @@ export class FeatureInfoHandler {
 			this.selected3DTileFeature = undefined;
 
 			if (clearCenter) {
-				this.selectedLayer?.selectedCenter?.set(undefined);
-				this.selectedLayer = undefined;
+				this.clearDistanceCenter();
 			}
 
 			this.map.refresh();
 		}
+	}
+
+	// Only clears the center when it is still the one set here, a placed building can have set its own center since
+	private clearDistanceCenter(): void {
+		const center = this.selectedLayer?.selectedCenter;
+		if (center && get(center) === this.distanceCenter) {
+			center.set(undefined);
+		}
+		this.selectedLayer = undefined;
+		this.distanceCenter = undefined;
 	}
 
 	// Stores the clicked position as center for the distance analysis of the layer the building belongs to.
@@ -89,6 +101,7 @@ export class FeatureInfoHandler {
 		if (!Cesium.defined(position)) return;
 
 		this.selectedLayer = layer;
+		this.distanceCenter = position;
 		layer.selectedCenter.set(position);
 	}
 
@@ -118,6 +131,12 @@ export class FeatureInfoHandler {
 	private pick3D(picked: any, location: Cesium.Cartesian2): FeatureInfo | undefined {
 		const id = picked.id ?? picked.primitive.id;
 
+		// A building placed with the tool "Gebouw plaatsen"
+		if (id instanceof PlacedBuilding) {
+			id.onClick?.();
+			return this.placedBuildingToFeatureInfo(id);
+		}
+
 		if (id instanceof Cesium.Entity) {
 			const info = this.cesiumEntityGetFeatureInfo(id);
 			if (info) {
@@ -134,6 +153,17 @@ export class FeatureInfoHandler {
 		}
 
 		return undefined;
+	}
+
+	private placedBuildingToFeatureInfo(building: PlacedBuilding): FeatureInfo {
+		const translate = get(_);
+		const records = [
+			new FeatureInfoRecord(translate("tools.placeBuilding.longitude"), building.longitude.toFixed(6)),
+			new FeatureInfoRecord(translate("tools.placeBuilding.latitude"), building.latitude.toFixed(6)),
+			new FeatureInfoRecord(translate("tools.placeBuilding.height"), building.heightAboveGround),
+			new FeatureInfoRecord(translate("tools.placeBuilding.heading"), building.heading)
+		];
+		return new FeatureInfo(building.title, records);
 	}
 
 	private cesiumEntityGetFeatureInfo(entity: Cesium.Entity): FeatureInfo | undefined {

@@ -451,7 +451,7 @@
 			"noLayer": "De 3D-laag voor de analyse is nog niet geladen.",
 			"distance": {
 				"title": "Afstandsanalyse",
-				"hint": "Klik op een gebouw op de kaart. Daarna kun je de gebouwen kleuren op afstand tot die plek.",
+				"hint": "Klik op een gebouw op de kaart, of plaats een gebouw met de tool Gebouw plaatsen. Daarna kun je de gebouwen kleuren op afstand tot die plek.",
 				"noCenter": "Nog geen gebouw geselecteerd.",
 				"centerSet": "Middelpunt gekozen.",
 				"on": "Afstandsanalyse aan",
@@ -462,7 +462,32 @@
 				"green": "Groen: tot (m)",
 				"beyond": "Blauw: verder weg",
 				"reset": "Standaardafstanden"
+			},
+			"shadow": {
+				"title": "Schaduw",
+				"hint": "Zet schaduw aan en kies een tijdstip om te zien waar gebouwen schaduw op de omgeving werpen.",
+				"show": "Schaduw tonen",
+				"hour": "Tijdstip (uur)"
 			}
+		},
+		"placeBuilding": {
+			"label": "Gebouw plaatsen",
+			"building": "Gebouw",
+			"noBuildings": "Er staan nog geen gebouwen in de config.",
+			"loadFailed": "Het model kon niet geladen worden.",
+			"place": "Plaats op de kaart",
+			"clickMap": "Klik op de kaart waar het gebouw moet komen.",
+			"visibility": "Zichtbaarheid",
+			"showBuilding": "Geplaatst gebouw tonen",
+			"hideUnderneath": "Bestaande bebouwing eronder weghalen",
+			"showSurroundings": "Omliggende gebouwen tonen",
+			"position": "Positie",
+			"dragHint": "Je kunt het gebouw ook over de kaart slepen.",
+			"longitude": "X (lengtegraad)",
+			"latitude": "Y (breedtegraad)",
+			"height": "Z (hoogte boven maaiveld, m)",
+			"heading": "Draaiing (graden)",
+			"remove": "Gebouw verwijderen"
 		},
 		"errors": {
 			"Drawing": {
