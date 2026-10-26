@@ -52,9 +52,9 @@
             "attribution": "PDOK",
             "settings": {
                 "url": "https://api.pdok.nl/kadaster/3d-basisvoorziening/ogc/v1_0/collections/gebouwen/3dtiles",
-                "defaultTheme": "Bouwjaar",
                 "enableHeightControl": true,
                 "themes": [
+                    
                     {
                         "title": "Bouwjaar",
                         "conditions": [
@@ -163,6 +163,14 @@
     },
     "groups": [],
     "tools": [
+           {
+       "id": "analysis",
+       "enabled": true,
+       "settings": {
+           "alias": "Analyse",
+           "layerId": "3"
+       }
+   },
         {
             "id": "layerManager",
             "enabled": true,
