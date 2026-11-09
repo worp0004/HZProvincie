@@ -1,3 +1,9 @@
+<script context="module" lang="ts">
+    // Remembered for the next info panel, so it opens where the user left it
+    let savedPosition: { left: number; top: number } | undefined;
+    let savedSize: { width: number; height: number } | undefined;
+</script>
+
 <script lang="ts">
     import { createEventDispatcher, onDestroy, onMount } from "svelte";
     import { fade } from "svelte/transition";
@@ -101,6 +107,61 @@
         handlerOpen = true;
     }
 
+    let panel: HTMLElement;
+    let position = savedPosition;
+    let size = savedSize;
+
+    $: panelStyle = [
+        position ? `left: ${position.left}px; top: ${position.top}px; bottom: auto;` : "",
+        size ? `width: ${size.width}px; height: ${size.height}px; max-width: none; max-height: none;` : ""
+    ].join(" ");
+
+    // Drag the panel by its title
+    function startMove(event: PointerEvent): void {
+        event.preventDefault();
+        const area = (panel.offsetParent as HTMLElement).getBoundingClientRect();
+        const box = panel.getBoundingClientRect();
+        const grabX = event.clientX - box.left;
+        const grabY = event.clientY - box.top;
+
+        followPointer((e) => {
+            position = savedPosition = {
+                left: clamp(e.clientX - area.left - grabX, 0, area.width - box.width),
+                top: clamp(e.clientY - area.top - grabY, 0, area.height - box.height)
+            };
+        });
+    }
+
+    // Make the panel bigger or smaller with the corner at the bottom right
+    function startResize(event: PointerEvent): void {
+        event.preventDefault();
+        const area = (panel.offsetParent as HTMLElement).getBoundingClientRect();
+        const box = panel.getBoundingClientRect();
+
+        // Hold the top left corner in place, otherwise the panel grows upwards from the bottom
+        position = savedPosition = { left: box.left - area.left, top: box.top - area.top };
+
+        followPointer((e) => {
+            size = savedSize = {
+                width: Math.max(200, box.width + e.clientX - event.clientX),
+                height: Math.max(120, box.height + e.clientY - event.clientY)
+            };
+        });
+    }
+
+    function followPointer(onMove: (event: PointerEvent) => void): void {
+        const stop = () => {
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", stop);
+        };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", stop);
+    }
+
+    function clamp(value: number, min: number, max: number): number {
+        return Math.min(Math.max(value, min), Math.max(min, max));
+    }
+
     function createTimeSeriesChart(node: HTMLElement, data: Array<{x: string, y: number}>) {
         // data: [{x: datestring, y: value}, {x: datestring, y: value}, ...]
         const y_input = Object.keys(data[0])[1];
@@ -133,6 +194,8 @@
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <div
         class="fiView"
+        bind:this={panel}
+        style={panelStyle}
         in:fade={{ delay: 0, duration: 150 }}
         out:fade={{ delay: 0, duration: 150 }}
         on:click={(e) => {
@@ -153,7 +216,8 @@
             />
         </div>
 
-        <div class="heading-01">
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div class="heading-01 drag-handle" title={$_("tools.featureInfo.move")} on:pointerdown={startMove}>
             {#if !$loading && results && results.length === 1}
                 {results[0].label}
             {:else}
@@ -235,6 +299,9 @@
                 </div>
             {/if}
         </div>
+
+        <!-- svelte-ignore a11y-no-static-element-interactions -->
+        <div class="resize-handle" title={$_("tools.featureInfo.resize")} on:pointerdown={startResize} />
 
         <Modal
             size="lg"
@@ -319,6 +386,25 @@
         position: absolute;
         top: 0;
         right: 0;
+    }
+
+    .drag-handle {
+        cursor: move;
+        user-select: none;
+        touch-action: none;
+        padding-right: var(--cds-spacing-07);
+    }
+
+    .resize-handle {
+        position: absolute;
+        right: 2px;
+        bottom: 2px;
+        width: 12px;
+        height: 12px;
+        cursor: nwse-resize;
+        touch-action: none;
+        border-right: 2px solid var(--cds-ui-04);
+        border-bottom: 2px solid var(--cds-ui-04);
     }
 
     .open-handler {

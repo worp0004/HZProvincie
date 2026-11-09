@@ -288,7 +288,9 @@
 			"value": "Waarde",
 			"link": "Link",
 			"open": "Openen",
-			"noPdfViewer": "Geen online PDF-viewer geïnstalleerd"
+			"noPdfViewer": "Geen online PDF-viewer geïnstalleerd",
+			"move": "Sleep om te verplaatsen",
+			"resize": "Sleep om groter of kleiner te maken"
 		},
 		"measure": {
 			"label": "Meten",
@@ -477,7 +479,15 @@
 			"loadFailed": "Het model kon niet geladen worden.",
 			"place": "Plaats op de kaart",
 			"clickMap": "Klik op de kaart waar het gebouw moet komen.",
-			"visibility": "Zichtbaarheid",
+			"uploadTitle": "Eigen BAG-gebouw",
+			"uploadHint": "Upload een CityJSON-bestand van de 3DBAG: een pand of een groep panden. Daarna klik je op de kaart om het neer te zetten.",
+			"upload": "Gebouw uploaden",
+			"uploadFailed": "Dit bestand kon niet gelezen worden. Gebruik een CityJSON-bestand van de 3DBAG.",
+			"tabPlace": "Plaatsen",
+			"tabPlaced": "Geplaatst",
+			"noPlaced": "Nog geen gebouwen geplaatst. Kies een gebouw en klik op Plaats op de kaart.",
+			"listHint": "Klik op een gebouw om het te bewerken en ernaartoe te gaan.",
+			"edit": "Bewerken",
 			"showBuilding": "Geplaatst gebouw tonen",
 			"hideUnderneath": "Bestaande bebouwing eronder weghalen",
 			"showSurroundings": "Omliggende gebouwen tonen",

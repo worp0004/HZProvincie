@@ -279,7 +279,9 @@
 			"value": "Valeur",
 			"link": "Lien",
 			"open": "Ouvrir",
-			"noPdfViewer": "Aucune visionneuse PDF en ligne installée"
+			"noPdfViewer": "Aucune visionneuse PDF en ligne installée",
+			"move": "Faites glisser pour déplacer",
+			"resize": "Faites glisser pour agrandir ou réduire"
 		},
 		"measure": {
 			"label": "Mesurer",
@@ -467,7 +469,15 @@
 			"loadFailed": "Le modèle n'a pas pu être chargé.",
 			"place": "Placer sur la carte",
 			"clickMap": "Cliquez sur la carte à l'endroit du bâtiment.",
-			"visibility": "Visibilité",
+			"uploadTitle": "Votre propre bâtiment BAG",
+			"uploadHint": "Téléversez un fichier CityJSON du 3DBAG : un bâtiment ou un groupe de bâtiments. Cliquez ensuite sur la carte pour le placer.",
+			"upload": "Téléverser un bâtiment",
+			"uploadFailed": "Ce fichier n'a pas pu être lu. Utilisez un fichier CityJSON du 3DBAG.",
+			"tabPlace": "Placer",
+			"tabPlaced": "Placés",
+			"noPlaced": "Aucun bâtiment placé. Choisissez un bâtiment et cliquez sur Placer sur la carte.",
+			"listHint": "Cliquez sur un bâtiment pour le modifier et y aller.",
+			"edit": "Modifier",
 			"showBuilding": "Afficher le bâtiment placé",
 			"hideUnderneath": "Retirer les bâtiments existants en dessous",
 			"showSurroundings": "Afficher les bâtiments environnants",

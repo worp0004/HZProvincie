@@ -222,11 +222,13 @@ def make_building_glb(v7, cityjson, object_id, outdir):
     write_building_glb(v7, local_vertices, local_triangles, glb_path)
     print(f"Opgeslagen: {glb_path}")
 
-    bouwjaar = cityjson["CityObjects"][object_id].get("attributes", {}).get("oorspronkelijkbouwjaar")
+    # Zelfde BAG-velden als in de tileset, zodat de thema's in de viewer ook op dit gebouw werken
+    attributes = v7.feature_properties(object_id, cityjson["CityObjects"][object_id])
     return {
-        "title": f"Pand {pand_number} ({bouwjaar})",
+        "title": f"Pand {pand_number} ({attributes.get('bouwjaar')})",
         "url": f"models/{object_id}.glb",
         "footprint": footprint_outline(local_vertices, local_triangles),
+        "attributes": attributes,
     }
 
 

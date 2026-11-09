@@ -1,21 +1,25 @@
 <script lang="ts">
-	import { getContext, onDestroy } from "svelte";
+	import { getContext, onDestroy, tick } from "svelte";
 	import { get } from "svelte/store";
 	import { _ } from "svelte-i18n";
 	import {
 		Button,
 		Checkbox,
+		FileUploaderButton,
 		InlineNotification,
 		NumberInput,
 		Select,
 		SelectItem,
-		Slider
+		Slider,
+		Tab,
+		Tabs
 	} from "carbon-components-svelte";
-	import { Building } from "carbon-icons-svelte";
+	import { Building, TrashCan } from "carbon-icons-svelte";
 	import * as Cesium from "cesium";
 
 	import type { MouseLocation } from "$lib/map-core/mouse-location";
 	import { PlacedBuilding } from "$lib/map-cesium/placed-building";
+	import { cityJsonToBuilding } from "$lib/map-cesium/cityjson-building";
 	import { MapToolMenuOption } from "../MapToolMenuOption";
 
 	export let id: string;
@@ -33,32 +37,41 @@
 	const tool = new MapToolMenuOption(id, icon, label);
 	registerTool(tool);
 
-	// One entry per GLB, scripts/maak_gebouw_glb.py prints these
+	// Tab 0 is "Plaatsen" (choose and upload), tab 1 is "Geplaatst" (list and edit)
+	const PLACE_TAB = 0;
+	const PLACED_TAB = 1;
+
+	// From the config (scripts/maak_gebouw_glb.py prints these) or uploaded by the user
 	interface BuildingSettings {
 		title: string;
 		url: string;
 		footprint?: Array<[number, number]>;
+		attributes?: Record<string, unknown>;
+		isGroup?: boolean;
 	}
 
 	let buildings: Array<BuildingSettings> = [];
 	let layerId: string | undefined;
 	let selectedBuildingId: string | number = 0;
+	let selectedTab = PLACE_TAB;
 
-	let building: PlacedBuilding | undefined;
-	let placedUrl: string | undefined;
+	// All buildings on the map, and the one that is edited in the panel
+	let placedBuildings: Array<PlacedBuilding> = [];
+	let activeBuilding: PlacedBuilding | undefined;
+	let placedList: HTMLElement | undefined;
+
 	let loading = false;
 	let loadFailed = false;
+	let uploadFailed = false;
 	let waitingForClick = false;
 	let dragging = false;
 	let dragHandler: Cesium.ScreenSpaceEventHandler | undefined;
 
-	// Values shown in the panel
+	// Values of the active building shown in the panel
 	let longitude = 0;
 	let latitude = 0;
 	let height = 0;
 	let heading = 0;
-	let showBuilding = true;
-	let hideBuildingsUnderneath = true;
 	let showSurroundings = true;
 
 	tool.settings.subscribe((settings: any) => {
@@ -112,105 +125,157 @@
 		map.off("mouseLeftClick", placeBuildingAtClick);
 	}
 
+	// Every click on "Plaats op de kaart" adds a new building, the ones already placed stay
 	async function placeBuildingAtClick(location: MouseLocation): Promise<void> {
 		const position = getGroundPosition(new Cesium.Cartesian2(location.x, location.y));
 		if (!position) return;
 		stopPlacing();
 
-		const chosen = buildings[Number(selectedBuildingId)];
-		if (!building || placedUrl !== chosen.url) {
-			await loadBuilding(chosen);
-		}
-		if (!building) return;
+		const newBuilding = await loadBuilding(buildings[Number(selectedBuildingId)]);
+		if (!newBuilding) return;
 
-		building.placeAt(position);
-		afterBuildingChanged();
+		newBuilding.placeAt(position);
+		placedBuildings = [...placedBuildings, newBuilding];
+		selectBuilding(newBuilding);
+		updateClipAreas();
 	}
 
-	async function loadBuilding(chosen: BuildingSettings): Promise<void> {
-		removeBuilding();
+	async function loadBuilding(chosen: BuildingSettings): Promise<PlacedBuilding | undefined> {
 		loading = true;
 		loadFailed = false;
 
-		const newBuilding = new PlacedBuilding(map, chosen.title, chosen.footprint ?? []);
-		newBuilding.visible = showBuilding;
-		newBuilding.onClick = shareCenterWithAnalysis;
+		const newBuilding = new PlacedBuilding(map, chosen.title, chosen.footprint ?? [], chosen.attributes);
+		newBuilding.onClick = () => selectBuilding(newBuilding);
+		// The outline of a group also covers everything between its buildings, so the surroundings stay by default
+		newBuilding.hideUnderneath = !chosen.isGroup;
 		try {
 			await newBuilding.load(chosen.url);
-			building = newBuilding;
-			placedUrl = chosen.url;
+			newBuilding.followTileset(getTilesetLayer()?.source);
+			return newBuilding;
 		} catch (error) {
 			console.error(error);
 			loadFailed = true;
+			return undefined;
+		} finally {
+			loading = false;
 		}
-		loading = false;
 	}
 
-	function removeBuilding(): void {
-		if (!building) return;
-		building.remove();
-		building = undefined;
-		placedUrl = undefined;
-		updateClipArea();
+	// A 3DBAG CityJSON file from the user: add it to the choices and start placing it
+	async function uploadBuilding(files: ReadonlyArray<File>): Promise<void> {
+		const file = files[0];
+		if (!file) return;
+
+		uploadFailed = false;
+		try {
+			const uploaded = cityJsonToBuilding(await file.text());
+			// A temporary url to the model in memory, the same way LEIA loads a dropped GLB file
+			const url = URL.createObjectURL(new Blob([uploaded.glb], { type: "model/gltf-binary" }));
+			buildings = [
+				...buildings,
+				{
+					title: uploaded.title,
+					url: url,
+					footprint: uploaded.footprint,
+					attributes: uploaded.attributes,
+					isGroup: uploaded.isGroup
+				}
+			];
+			selectedBuildingId = buildings.length - 1;
+			startPlacing();
+		} catch (error) {
+			console.error(error);
+			uploadFailed = true;
+		}
+	}
+
+	// Makes a building the one that is edited and the center of the distance analysis, and shows it in the "Geplaatst" tab
+	function selectBuilding(placed: PlacedBuilding): void {
+		activeBuilding = placed;
+		selectedTab = PLACED_TAB;
+		updatePanel();
+		shareCenterWithAnalysis();
+		scrollActiveRowIntoView();
+	}
+
+	// With many buildings the list scrolls, keep the active one in view
+	async function scrollActiveRowIntoView(): Promise<void> {
+		await tick();
+		placedList?.querySelector(".active")?.scrollIntoView({ block: "nearest" });
+	}
+
+	// Clicked in the list: select it and move the camera to it
+	function selectAndFlyTo(placed: PlacedBuilding): void {
+		selectBuilding(placed);
+		placed.flyTo();
+	}
+
+	function removeBuilding(placed: PlacedBuilding): void {
+		placed.remove();
+		placedBuildings = placedBuildings.filter((other) => other !== placed);
+		if (activeBuilding === placed) activeBuilding = undefined;
+		updateClipAreas();
 	}
 
 	function afterBuildingChanged(): void {
 		updatePanel();
-		updateClipArea();
+		updateClipAreas();
 		shareCenterWithAnalysis();
 	}
 
 	function updatePanel(): void {
-		if (!building) return;
-		longitude = Number(building.longitude.toFixed(6));
-		latitude = Number(building.latitude.toFixed(6));
-		height = building.heightAboveGround;
-		heading = building.heading;
+		if (!activeBuilding) return;
+		longitude = Number(activeBuilding.longitude.toFixed(6));
+		latitude = Number(activeBuilding.latitude.toFixed(6));
+		height = activeBuilding.heightAboveGround;
+		heading = activeBuilding.heading;
 	}
 
-	function updateClipArea(): void {
-		const footprint = building && hideBuildingsUnderneath ? building.getFootprint() : [];
-		getTilesetLayer()?.setClipArea(footprint.length >= 3 ? footprint : undefined);
+	// Clip the existing buildings under every placed building that has "bebouwing eronder weghalen" on
+	function updateClipAreas(): void {
+		const areas = placedBuildings.filter((placed) => placed.hideUnderneath).map((placed) => placed.getFootprint());
+		getTilesetLayer()?.setClipAreas(areas);
 	}
 
-	// The distance analysis (tool "analysis") uses the placed building as its center
+	// The distance analysis (tool "analysis") uses the active building as its center
 	function shareCenterWithAnalysis(): void {
 		const layer = getTilesetLayer();
-		if (building && layer?.selectedCenter) {
-			layer.selectedCenter.set(building.getPosition());
+		if (activeBuilding && layer?.selectedCenter) {
+			layer.selectedCenter.set(activeBuilding.getPosition());
 		}
 	}
 
 	function onPositionChange(): void {
 		const newLongitude = readNumber(longitude);
 		const newLatitude = readNumber(latitude);
-		if (!building || newLongitude === undefined || newLatitude === undefined) return;
-		building.moveTo(newLongitude, newLatitude);
+		if (!activeBuilding || newLongitude === undefined || newLatitude === undefined) return;
+		activeBuilding.moveTo(newLongitude, newLatitude);
 		afterBuildingChanged();
 	}
 
 	function onHeightChange(): void {
 		const newHeight = readNumber(height);
-		if (!building || newHeight === undefined) return;
-		building.setHeightAboveGround(newHeight);
+		if (!activeBuilding || newHeight === undefined) return;
+		activeBuilding.setHeightAboveGround(newHeight);
 		afterBuildingChanged();
 	}
 
 	function onHeadingChange(): void {
 		const newHeading = readNumber(heading);
-		if (!building || newHeading === undefined) return;
-		building.setHeading(newHeading);
+		if (!activeBuilding || newHeading === undefined) return;
+		activeBuilding.setHeading(newHeading);
 		afterBuildingChanged();
 	}
 
 	function setBuildingVisible(visible: boolean): void {
-		showBuilding = visible;
-		building?.setVisible(visible);
+		activeBuilding?.setVisible(visible);
+		placedBuildings = placedBuildings;
 	}
 
 	function setHideBuildingsUnderneath(hide: boolean): void {
-		hideBuildingsUnderneath = hide;
-		updateClipArea();
+		if (!activeBuilding) return;
+		activeBuilding.hideUnderneath = hide;
+		updateClipAreas();
 	}
 
 	function setSurroundingsVisible(visible: boolean): void {
@@ -223,7 +288,7 @@
 		return layer ? get(layer.visible) : true;
 	}
 
-	// Drag the placed building over the map while this tool is open
+	// Drag any placed building over the map while this tool is open
 	function startDragging(): void {
 		if (dragHandler) return;
 		dragHandler = new Cesium.ScreenSpaceEventHandler(map.viewer.canvas);
@@ -239,19 +304,22 @@
 	}
 
 	function onDragStart(event: { position: Cesium.Cartesian2 }): void {
-		if (waitingForClick || !building) return;
-		if (!building.isPickedModel(map.viewer.scene.pick(event.position))) return;
+		if (waitingForClick) return;
+		const picked = map.viewer.scene.pick(event.position)?.id;
+		if (!(picked instanceof PlacedBuilding) || !placedBuildings.includes(picked)) return;
+
+		selectBuilding(picked);
 		dragging = true;
 		lockCamera(true);
 	}
 
 	function onDragMove(event: { endPosition: Cesium.Cartesian2 }): void {
-		if (!dragging || !building) return;
+		if (!dragging || !activeBuilding) return;
 		const position = getGroundPosition(event.endPosition);
 		if (!position) return;
-		building.placeAt(position);
+		activeBuilding.placeAt(position);
 		updatePanel();
-		updateClipArea();
+		updateClipAreas();
 	}
 
 	function onDragEnd(): void {
@@ -268,53 +336,97 @@
 
 {#if $selectedTool === tool}
 	<div class="wrapper">
-		<div class="section">
-			{#if buildings.length === 0}
-				<InlineNotification
-					lowContrast
-					hideCloseButton
-					kind="info"
-					title={$_("tools.placeBuilding.noBuildings")}
-				/>
-			{:else}
-				<div class="field">
-					<Select labelText={$_("tools.placeBuilding.building")} bind:selected={selectedBuildingId}>
-						{#each buildings as option, index}
-							<SelectItem value={index} text={option.title} />
-						{/each}
-					</Select>
-				</div>
-				<Button size="small" disabled={loading || waitingForClick} on:click={startPlacing}>
-					{$_("tools.placeBuilding.place")}
-				</Button>
-				{#if waitingForClick}
-					<p class="label-01 hint">{$_("tools.placeBuilding.clickMap")}</p>
+		<div class="tabs">
+			<Tabs autoWidth bind:selected={selectedTab}>
+				<Tab label={$_("tools.placeBuilding.tabPlace")} />
+				<Tab label={`${$_("tools.placeBuilding.tabPlaced")} (${placedBuildings.length})`} />
+			</Tabs>
+		</div>
+
+		{#if selectedTab === PLACE_TAB}
+			<div class="section">
+				{#if buildings.length === 0}
+					<InlineNotification
+						lowContrast
+						hideCloseButton
+						kind="info"
+						title={$_("tools.placeBuilding.noBuildings")}
+					/>
+				{:else}
+					<div class="field">
+						<Select labelText={$_("tools.placeBuilding.building")} bind:selected={selectedBuildingId}>
+							{#each buildings as option, index}
+								<SelectItem value={index} text={option.title} />
+							{/each}
+						</Select>
+					</div>
+					<Button size="small" disabled={loading || waitingForClick} on:click={startPlacing}>
+						{$_("tools.placeBuilding.place")}
+					</Button>
+					{#if waitingForClick}
+						<p class="label-01 hint">{$_("tools.placeBuilding.clickMap")}</p>
+					{/if}
+					{#if loadFailed}
+						<InlineNotification
+							lowContrast
+							hideCloseButton
+							kind="error"
+							title={$_("tools.placeBuilding.loadFailed")}
+						/>
+					{/if}
 				{/if}
-				{#if loadFailed}
+			</div>
+
+			<div class="divider" />
+			<div class="section">
+				<div class="label-02">{$_("tools.placeBuilding.uploadTitle")}</div>
+				<p class="label-01 hint">{$_("tools.placeBuilding.uploadHint")}</p>
+				<FileUploaderButton
+					labelText={$_("tools.placeBuilding.upload")}
+					accept={[".json", ".jsonl"]}
+					kind="tertiary"
+					size="small"
+					disableLabelChanges
+					on:change={(e) => uploadBuilding(e.detail)}
+				/>
+				{#if uploadFailed}
 					<InlineNotification
 						lowContrast
 						hideCloseButton
 						kind="error"
-						title={$_("tools.placeBuilding.loadFailed")}
+						title={$_("tools.placeBuilding.uploadFailed")}
 					/>
 				{/if}
-			{/if}
-		</div>
-
-		{#if building}
-			<div class="divider" />
+			</div>
+		{:else}
 			<div class="section">
-				<div class="label-02">{$_("tools.placeBuilding.visibility")}</div>
-				<Checkbox
-					labelText={$_("tools.placeBuilding.showBuilding")}
-					checked={showBuilding}
-					on:check={(e) => setBuildingVisible(e.detail)}
-				/>
-				<Checkbox
-					labelText={$_("tools.placeBuilding.hideUnderneath")}
-					checked={hideBuildingsUnderneath}
-					on:check={(e) => setHideBuildingsUnderneath(e.detail)}
-				/>
+				{#if placedBuildings.length === 0}
+					<p class="label-01 hint">{$_("tools.placeBuilding.noPlaced")}</p>
+				{:else}
+					<p class="label-01 hint">{$_("tools.placeBuilding.listHint")}</p>
+					<ul class="placed-list" bind:this={placedList}>
+						{#each placedBuildings as placed, index (placed)}
+							<li class="placed-row" class:active={placed === activeBuilding}>
+								<button
+									class="placed-item"
+									class:hidden-building={!placed.visible}
+									on:click={() => selectAndFlyTo(placed)}
+								>
+									<span class="placed-number">{index + 1}</span>
+									<span class="placed-title" title={placed.title}>{placed.title}</span>
+								</button>
+								<button
+									class="delete-button"
+									title={$_("tools.placeBuilding.remove")}
+									aria-label={$_("tools.placeBuilding.remove")}
+									on:click={() => removeBuilding(placed)}
+								>
+									<TrashCan size={16} />
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 				<Checkbox
 					labelText={$_("tools.placeBuilding.showSurroundings")}
 					checked={showSurroundings}
@@ -322,49 +434,62 @@
 				/>
 			</div>
 
-			<div class="divider" />
-			<div class="section">
-				<div class="label-02">{$_("tools.placeBuilding.position")}</div>
-				<p class="label-01 hint">{$_("tools.placeBuilding.dragHint")}</p>
-				<div class="field">
-					<NumberInput
-						label={$_("tools.placeBuilding.longitude")}
-						step={0.00001}
-						bind:value={longitude}
-						on:change={onPositionChange}
+			{#if activeBuilding}
+				<div class="divider" />
+				<div class="section">
+					<div class="label-02">
+						{$_("tools.placeBuilding.edit")}: {placedBuildings.indexOf(activeBuilding) + 1}. {activeBuilding.title}
+					</div>
+					<Checkbox
+						labelText={$_("tools.placeBuilding.showBuilding")}
+						checked={activeBuilding.visible}
+						on:check={(e) => setBuildingVisible(e.detail)}
 					/>
-				</div>
-				<div class="field">
-					<NumberInput
-						label={$_("tools.placeBuilding.latitude")}
-						step={0.00001}
-						bind:value={latitude}
-						on:change={onPositionChange}
+					<Checkbox
+						labelText={$_("tools.placeBuilding.hideUnderneath")}
+						checked={activeBuilding.hideUnderneath}
+						on:check={(e) => setHideBuildingsUnderneath(e.detail)}
 					/>
+
+					<div class="label-02 subtitle">{$_("tools.placeBuilding.position")}</div>
+					<p class="label-01 hint">{$_("tools.placeBuilding.dragHint")}</p>
+					<div class="field">
+						<NumberInput
+							label={$_("tools.placeBuilding.longitude")}
+							step={0.00001}
+							bind:value={longitude}
+							on:change={onPositionChange}
+						/>
+					</div>
+					<div class="field">
+						<NumberInput
+							label={$_("tools.placeBuilding.latitude")}
+							step={0.00001}
+							bind:value={latitude}
+							on:change={onPositionChange}
+						/>
+					</div>
+					<div class="field">
+						<NumberInput
+							label={$_("tools.placeBuilding.height")}
+							step={0.5}
+							bind:value={height}
+							on:change={onHeightChange}
+						/>
+					</div>
+					<div class="field slider">
+						<Slider
+							labelText={$_("tools.placeBuilding.heading")}
+							min={0}
+							max={359}
+							step={1}
+							bind:value={heading}
+							on:input={onHeadingChange}
+							on:change={onHeadingChange}
+						/>
+					</div>
 				</div>
-				<div class="field">
-					<NumberInput
-						label={$_("tools.placeBuilding.height")}
-						step={0.5}
-						bind:value={height}
-						on:change={onHeightChange}
-					/>
-				</div>
-				<div class="field slider">
-					<Slider
-						labelText={$_("tools.placeBuilding.heading")}
-						min={0}
-						max={359}
-						step={1}
-						bind:value={heading}
-						on:input={onHeadingChange}
-						on:change={onHeadingChange}
-					/>
-				</div>
-				<Button size="small" kind="danger-tertiary" on:click={removeBuilding}>
-					{$_("tools.placeBuilding.remove")}
-				</Button>
-			</div>
+			{/if}
 		{/if}
 	</div>
 {/if}
@@ -372,6 +497,10 @@
 <style>
 	.wrapper {
 		width: 100%;
+	}
+
+	.tabs {
+		padding: var(--cds-spacing-03) var(--cds-spacing-05) 0;
 	}
 
 	.section {
@@ -389,6 +518,91 @@
 	.hint {
 		margin: 0;
 		color: var(--cds-text-secondary);
+	}
+
+	.subtitle {
+		padding-top: var(--cds-spacing-03);
+	}
+
+	/* Own scrollbar, so the edit part below stays in view when there are many buildings */
+	.placed-list {
+		width: 100%;
+		max-height: 16rem;
+		overflow-y: auto;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		border-bottom: 1px solid var(--cds-ui-03);
+	}
+
+	.placed-row {
+		display: flex;
+		align-items: center;
+		border-top: 1px solid var(--cds-ui-03);
+	}
+
+	.placed-row:hover {
+		background: var(--cds-hover-ui);
+	}
+
+	.placed-row.active {
+		background: var(--cds-selected-ui);
+	}
+
+	.placed-item {
+		flex: 1 1 auto;
+		min-width: 0;
+		min-height: 2.5rem;
+		display: flex;
+		align-items: center;
+		column-gap: var(--cds-spacing-03);
+		padding: 0 var(--cds-spacing-03);
+		border: none;
+		background: transparent;
+		color: var(--cds-text-01);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.placed-row.active .placed-item {
+		font-weight: 600;
+	}
+
+	.placed-item.hidden-building {
+		color: var(--cds-text-03);
+	}
+
+	.placed-number {
+		flex: 0 0 1.5rem;
+		color: var(--cds-text-02);
+	}
+
+	.placed-title {
+		flex: 1 1 auto;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.875rem;
+	}
+
+	/* Neutral at rest and red on hover, a column of red bins would look like an error */
+	.delete-button {
+		flex: 0 0 2.5rem;
+		height: 2.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		background: transparent;
+		color: var(--cds-icon-primary);
+		cursor: pointer;
+	}
+
+	.delete-button:hover,
+	.delete-button:focus-visible {
+		color: var(--cds-support-01);
 	}
 
 	/* Carbon's slider has a default min-width that overflows a narrow panel */

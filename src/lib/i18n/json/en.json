@@ -281,7 +281,9 @@
 			"value": "Value",
 			"link": "Link",
 			"open": "Open",
-			"noPdfViewer": "No online PDF viewer installed"
+			"noPdfViewer": "No online PDF viewer installed",
+			"move": "Drag to move",
+			"resize": "Drag to make bigger or smaller"
 		},
 		"measure": {
 			"label": "Measure",
@@ -470,7 +472,15 @@
 			"loadFailed": "The model could not be loaded.",
 			"place": "Place on the map",
 			"clickMap": "Click on the map where the building should go.",
-			"visibility": "Visibility",
+			"uploadTitle": "Your own BAG building",
+			"uploadHint": "Upload a 3DBAG CityJSON file: one building or a group of buildings. Then click on the map to place it.",
+			"upload": "Upload building",
+			"uploadFailed": "This file could not be read. Use a 3DBAG CityJSON file.",
+			"tabPlace": "Place",
+			"tabPlaced": "Placed",
+			"noPlaced": "No buildings placed yet. Choose a building and click Place on the map.",
+			"listHint": "Click on a building to edit it and go to it.",
+			"edit": "Edit",
 			"showBuilding": "Show placed building",
 			"hideUnderneath": "Remove existing buildings underneath",
 			"showSurroundings": "Show surrounding buildings",

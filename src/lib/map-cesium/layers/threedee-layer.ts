@@ -443,8 +443,8 @@ export class ThreedeeLayer extends PrimitiveLayer {
 		}
 	}
 
-	// Hides the part of the tileset inside the area, so a placed building can replace what stands there
-	public setClipArea(positions: Array<Cesium.Cartesian3> | undefined): void {
+	// Hides the parts of the tileset inside these areas, so placed buildings can replace what stands there
+	public setClipAreas(areas: Array<Array<Cesium.Cartesian3>>): void {
 		if (!this.source) return;
 
 		if (!this.source.clippingPolygons) {
@@ -453,8 +453,10 @@ export class ThreedeeLayer extends PrimitiveLayer {
 
 		const clipping = this.source.clippingPolygons;
 		clipping.removeAll();
-		if (positions) {
-			clipping.add(new Cesium.ClippingPolygon({ positions: positions }));
+		for (const positions of areas) {
+			if (positions.length >= 3) {
+				clipping.add(new Cesium.ClippingPolygon({ positions: positions }));
+			}
 		}
 		this.map.refresh();
 	}

@@ -14,10 +14,6 @@ export class FeatureInfoHandler {
 	private selected: Cesium.Entity | undefined;
 	private scratchColor!: Cesium.MaterialProperty;
 
-	// Layer (ThreedeeLayer) of the currently selected 3D tile feature, used for the distance analysis
-	private selectedLayer: any;
-	private distanceCenter: Cesium.Cartesian3 | undefined;
-
 	private map: Map;
 
 	constructor(map: Map) {
@@ -30,9 +26,7 @@ export class FeatureInfoHandler {
 	}
 
 	public async queryFeatureInfo(options: FeatureInfoRequestOptions): Promise<FeatureInfo[]> {
-		// Keep the distance center while resetting; it is overwritten below when a new building is picked
-		// and cleared by the results subscriber when nothing is selected anymore.
-		this.resetSelected3DTileFeature(false);
+		this.resetSelected3DTileFeature();
 		this.resetSelectedEntity();
 
 		const fiList = new Array<FeatureInfo>();
@@ -65,27 +59,13 @@ export class FeatureInfoHandler {
 		this.map.refresh();
 	}
 
-	private resetSelected3DTileFeature(clearCenter: boolean = true): void {
+	// Only removes the highlight. The center of the distance analysis stays, so the analysis keeps running after unselecting.
+	private resetSelected3DTileFeature(): void {
 		if (this.selected3DTileFeature) {
 			this.selected3DTileFeature.setProperty(this.selectedProperty, "false");
 			this.selected3DTileFeature = undefined;
-
-			if (clearCenter) {
-				this.clearDistanceCenter();
-			}
-
 			this.map.refresh();
 		}
-	}
-
-	// Only clears the center when it is still the one set here, a placed building can have set its own center since
-	private clearDistanceCenter(): void {
-		const center = this.selectedLayer?.selectedCenter;
-		if (center && get(center) === this.distanceCenter) {
-			center.set(undefined);
-		}
-		this.selectedLayer = undefined;
-		this.distanceCenter = undefined;
 	}
 
 	// Stores the clicked position as center for the distance analysis of the layer the building belongs to.
@@ -100,8 +80,6 @@ export class FeatureInfoHandler {
 		const position = this.map.viewer.scene.pickPosition(location);
 		if (!Cesium.defined(position)) return;
 
-		this.selectedLayer = layer;
-		this.distanceCenter = position;
 		layer.selectedCenter.set(position);
 	}
 
@@ -158,6 +136,7 @@ export class FeatureInfoHandler {
 	private placedBuildingToFeatureInfo(building: PlacedBuilding): FeatureInfo {
 		const translate = get(_);
 		const records = [
+			...Object.entries(building.attributes).map(([key, value]) => new FeatureInfoRecord(key, value)),
 			new FeatureInfoRecord(translate("tools.placeBuilding.longitude"), building.longitude.toFixed(6)),
 			new FeatureInfoRecord(translate("tools.placeBuilding.latitude"), building.latitude.toFixed(6)),
 			new FeatureInfoRecord(translate("tools.placeBuilding.height"), building.heightAboveGround),
