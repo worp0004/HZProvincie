@@ -4,257 +4,304 @@ import { FeatureInfo } from "$lib/map-core/feature-info/feature-info";
 import { FeatureInfoRequestOptions } from "$lib/map-core/feature-info/feature-info-request-options";
 import { FeatureInfoRecord } from "$lib/map-core/feature-info/feature-info-record";
 import { get } from "svelte/store";
-
+import { _ } from "svelte-i18n";
+import { PlacedBuilding } from "./placed-building";
 
 export class FeatureInfoHandler {
-    public readonly selectedProperty: string = "cesium_selected";
-    public selected3DTileFeature : Cesium.Cesium3DTileFeature | undefined;
+	public readonly selectedProperty: string = "cesium_selected";
+	public selected3DTileFeature: Cesium.Cesium3DTileFeature | undefined;
 
-    private selected: Cesium.Entity | undefined;
-    private scratchColor!: Cesium.MaterialProperty;
+	private selected: Cesium.Entity | undefined;
+	private scratchColor!: Cesium.MaterialProperty;
 
-    private map: Map;
+	private map: Map;
 
-    constructor(map: Map) {
-        this.map = map;
-        this.map.featureInfo.results.subscribe(results => {
-            if(!results || results.length === 0) {
-                this.resetSelected3DTileFeature();
-            }
-        })
-    }
+	constructor(map: Map) {
+		this.map = map;
+		this.map.featureInfo.results.subscribe((results) => {
+			if (!results || results.length === 0) {
+				this.resetSelected3DTileFeature();
+			}
+		});
+	}
 
-    public async queryFeatureInfo(options: FeatureInfoRequestOptions): Promise<FeatureInfo[]> {
-        this.resetSelected3DTileFeature();
-        this.resetSelectedEntity();
+	public async queryFeatureInfo(options: FeatureInfoRequestOptions): Promise<FeatureInfo[]> {
+		this.resetSelected3DTileFeature();
+		this.resetSelectedEntity();
 
-        const fiList = new Array<FeatureInfo>()
+		const fiList = new Array<FeatureInfo>();
 
-        const location = new Cesium.Cartesian2(options.location[0], options.location[1]);
-        const picked = this.map.viewer.scene.pick(location);
-        let info: FeatureInfo | undefined = undefined;
+		const location = new Cesium.Cartesian2(options.location[0], options.location[1]);
+		const picked = this.map.viewer.scene.pick(location);
+		let info: FeatureInfo | undefined = undefined;
 
-        // First check if primitive is clicked
-        if (Cesium.defined(picked)) {
-            info = this.pick3D(picked);
-        }
+		// First check if primitive is clicked
+		if (Cesium.defined(picked)) {
+			info = this.pick3D(picked, location);
+		}
 
-        // Nothing found, request imagery layers
-        if (info === undefined && Cesium.defined(this.map.viewer.scene.globe)) {
-            info = await this.pickImageryLayers(location);
-        }
+		// Nothing found, request imagery layers
+		if (info === undefined && Cesium.defined(this.map.viewer.scene.globe)) {
+			info = await this.pickImageryLayers(location);
+		}
 
-        if (info) {
-            fiList.push(info);
-        }
+		if (info) {
+			fiList.push(info);
+		}
 
-        return fiList;
-    }
+		return fiList;
+	}
 
-    private highlight3DTileFeature(feature: Cesium.Cesium3DTileFeature): void {   
-        this.selected3DTileFeature = feature;
-        this.selected3DTileFeature.setProperty(this.selectedProperty, "true");
-        
-        this.map.refresh();
-    }
+	private highlight3DTileFeature(feature: Cesium.Cesium3DTileFeature): void {
+		this.selected3DTileFeature = feature;
+		this.selected3DTileFeature.setProperty(this.selectedProperty, "true");
 
-    private resetSelected3DTileFeature(): void {
-        if(this.selected3DTileFeature) {
-            this.selected3DTileFeature.setProperty(this.selectedProperty, "false");
-            this.selected3DTileFeature = undefined;            
-            this.map.refresh();
-        }
-    }
+		this.map.refresh();
+	}
 
-    private highlightEntity(entity: Cesium.Entity): void {
-        // Only support for ellipse and cylinder
-        const entityGraphics = entity.ellipse ?? entity.cylinder;
-        if (!entityGraphics || !entityGraphics.material) return;
-        this.selected = entity;
-        this.scratchColor = entityGraphics.material;
-        entityGraphics.material = new Cesium.ColorMaterialProperty(Cesium.Color.fromCssColorString(get(this.map.featureInfo.selectedFeatureColor)).withAlpha(0.85));
-        this.map.refresh();
-    }
+	// Only removes the highlight. The center of the distance analysis stays, so the analysis keeps running after unselecting.
+	private resetSelected3DTileFeature(): void {
+		if (this.selected3DTileFeature) {
+			this.selected3DTileFeature.setProperty(this.selectedProperty, "false");
+			this.selected3DTileFeature = undefined;
+			this.map.refresh();
+		}
+	}
 
-    private resetSelectedEntity(): void {
-        const selectedEntity = this.selected?.ellipse ?? this.selected?.cylinder;
-        if (selectedEntity) {
-            selectedEntity.material = this.scratchColor;
-            this.selected = undefined;
-            this.map.refresh();
-        }
-    }
+	// Stores the clicked position as center for the distance analysis of the layer the building belongs to.
+	private setDistanceCenter(
+		feature: Cesium.Cesium3DTileFeature,
+		location: Cesium.Cartesian2
+	): void {
+		//@ts-ignore
+		const layer = this.map.getLayerById(feature.tileset.config_id) as any;
+		if (!layer?.selectedCenter) return;
 
-    private pick3D(picked: any): FeatureInfo | undefined {
-        const id = picked.id ?? picked.primitive.id;
-        
-        if (id instanceof Cesium.Entity) {
-            const info = this.cesiumEntityGetFeatureInfo(id);
-            if (info) {
-                this.highlightEntity(id);
-                return info;
-            }
-            return undefined;
-        }
+		const position = this.map.viewer.scene.pickPosition(location);
+		if (!Cesium.defined(position)) return;
 
-        if (picked instanceof Cesium.Cesium3DTileFeature) {     
-            this.highlight3DTileFeature(picked);
-            return this.cesium3dTileFeatureToFeatureInfo(picked);
-        }
+		layer.selectedCenter.set(position);
+	}
 
-        return undefined;
-    }
+	private highlightEntity(entity: Cesium.Entity): void {
+		// Only support for ellipse and cylinder
+		const entityGraphics = entity.ellipse ?? entity.cylinder;
+		if (!entityGraphics || !entityGraphics.material) return;
+		this.selected = entity;
+		this.scratchColor = entityGraphics.material;
+		entityGraphics.material = new Cesium.ColorMaterialProperty(
+			Cesium.Color.fromCssColorString(get(this.map.featureInfo.selectedFeatureColor)).withAlpha(
+				0.85
+			)
+		);
+		this.map.refresh();
+	}
 
-    private cesiumEntityGetFeatureInfo(entity: Cesium.Entity): FeatureInfo | undefined {
-        const records = new Array<FeatureInfoRecord>();
-        if (entity.properties) {
-            const props = entity.properties;
-            const propNames = props.propertyNames;
-            for (let x = 0; x < propNames.length; x++) {
-                records.push(new FeatureInfoRecord(propNames[x], props[propNames[x]]));
-            }
-            return new FeatureInfo(entity.name ?? "", records); // TODO: Figure out if config ID can be retrieved
-        } else {
-            return undefined;
-        }
-    }
+	private resetSelectedEntity(): void {
+		const selectedEntity = this.selected?.ellipse ?? this.selected?.cylinder;
+		if (selectedEntity) {
+			selectedEntity.material = this.scratchColor;
+			this.selected = undefined;
+			this.map.refresh();
+		}
+	}
 
-    private cesium3dTileFeatureToFeatureInfo(feature: Cesium.Cesium3DTileFeature): FeatureInfo | undefined {
-        const records = new Array<FeatureInfoRecord>();
-        const propertyNames = feature.getPropertyIds();
-        const length = propertyNames.length;
+	private pick3D(picked: any, location: Cesium.Cartesian2): FeatureInfo | undefined {
+		const id = picked.id ?? picked.primitive.id;
 
-        for (let i = 0; i < length; ++i) {
-            const propertyName = propertyNames[i];
-            let property = feature.getProperty(propertyName);
-            if (!property) {
-                property = "empty";
-            }
+		// A building placed with the tool "Gebouw plaatsen"
+		if (id instanceof PlacedBuilding) {
+			id.onClick?.();
+			return this.placedBuildingToFeatureInfo(id);
+		}
 
-            property = property.toString();
+		if (id instanceof Cesium.Entity) {
+			const info = this.cesiumEntityGetFeatureInfo(id);
+			if (info) {
+				this.highlightEntity(id);
+				return info;
+			}
+			return undefined;
+		}
 
-            // Filter out our selected property for styling
-            if(propertyNames[i] === this.selectedProperty) {
-                continue;
-            }
-            if (property.startsWith("url:")) {
-                property = property.replace("url:", "");
-                const parts = property.split(",");
-                records.push(
-                    new FeatureInfoRecord(
-                        propertyNames[i],
-                        `<a class="link" href="${parts[0]}" target="_blank">${parts[1]}</a>`
-                    )
-                );
-            } else {
-                records.push(new FeatureInfoRecord(propertyNames[i], property));
-            }
-        }
+		if (picked instanceof Cesium.Cesium3DTileFeature) {
+			this.highlight3DTileFeature(picked);
+			this.setDistanceCenter(picked, location);
+			return this.cesium3dTileFeatureToFeatureInfo(picked);
+		}
 
-        let title = this.getCesium3DTileFeatureName(feature);
+		return undefined;
+	}
 
-        //@ts-ignore
-        const configId = feature.tileset.config_id;
-        //@ts-ignore
-        const tiltesetTitle = feature.tileset.title;
+	private placedBuildingToFeatureInfo(building: PlacedBuilding): FeatureInfo {
+		const translate = get(_);
+		const records = [
+			...Object.entries(building.attributes).map(([key, value]) => new FeatureInfoRecord(key, value)),
+			new FeatureInfoRecord(translate("tools.placeBuilding.longitude"), building.longitude.toFixed(6)),
+			new FeatureInfoRecord(translate("tools.placeBuilding.latitude"), building.latitude.toFixed(6)),
+			new FeatureInfoRecord(translate("tools.placeBuilding.height"), building.heightAboveGround),
+			new FeatureInfoRecord(translate("tools.placeBuilding.heading"), building.heading)
+		];
+		return new FeatureInfo(building.title, records);
+	}
 
-        if (tiltesetTitle) {
-            title = tiltesetTitle;
-        } else {
-            if (configId) {
-                title = this.getLayerName(configId);
-            }
-        }
+	private cesiumEntityGetFeatureInfo(entity: Cesium.Entity): FeatureInfo | undefined {
+		const records = new Array<FeatureInfoRecord>();
+		if (entity.properties) {
+			const props = entity.properties;
+			const propNames = props.propertyNames;
+			for (let x = 0; x < propNames.length; x++) {
+				records.push(new FeatureInfoRecord(propNames[x], props[propNames[x]]));
+			}
+			return new FeatureInfo(entity.name ?? "", records); // TODO: Figure out if config ID can be retrieved
+		} else {
+			return undefined;
+		}
+	}
 
-        const selectedLayer = this.map.getLayerById(configId);
-        if (selectedLayer?.config.disablePopup) return undefined;
+	private cesium3dTileFeatureToFeatureInfo(
+		feature: Cesium.Cesium3DTileFeature
+	): FeatureInfo | undefined {
+		const records = new Array<FeatureInfoRecord>();
+		const propertyNames = feature.getPropertyIds();
+		const length = propertyNames.length;
 
-        return new FeatureInfo(title, records);
-    }
+		for (let i = 0; i < length; ++i) {
+			const propertyName = propertyNames[i];
+			let property = feature.getProperty(propertyName);
+			if (!property) {
+				property = "empty";
+			}
 
-    private async pickImageryLayers(position: Cesium.Cartesian2): Promise<FeatureInfo | undefined> {
-        const pickRay = this.map.viewer.scene.camera.getPickRay(position);
-        if (!pickRay) return undefined;
-        const features = await this.map.viewer.scene.imageryLayers.pickImageryLayerFeatures(pickRay, this.map.viewer.scene);
-        if (!features || features.length === 0) return undefined;
-        return this.imageryFeaturesToFeatureInfo(features);
-    }
+			property = property.toString();
 
-    private imageryFeaturesToFeatureInfo(features: Array<Cesium.ImageryLayerFeatureInfo>): FeatureInfo | undefined {
-        if (!features || features.length === 0) {
-            return undefined;
-        }
+			// Filter out our selected property for styling
+			if (propertyNames[i] === this.selectedProperty) {
+				continue;
+			}
+			if (property.startsWith("url:")) {
+				property = property.replace("url:", "");
+				const parts = property.split(",");
+				records.push(
+					new FeatureInfoRecord(
+						propertyNames[i],
+						`<a class="link" href="${parts[0]}" target="_blank">${parts[1]}</a>`
+					)
+				);
+			} else {
+				records.push(new FeatureInfoRecord(propertyNames[i], property));
+			}
+		}
 
-        const feature = features[0];
-        const properties = feature.properties;
-        const records = new Array<FeatureInfoRecord>();
+		let title = this.getCesium3DTileFeatureName(feature);
 
-        if (properties) {
-            const keys = Object.keys(properties);
-            keys.forEach((key) => {
-                records.push(new FeatureInfoRecord(key, properties[key]));
-            });
-        }
+		//@ts-ignore
+		const configId = feature.tileset.config_id;
+		//@ts-ignore
+		const tiltesetTitle = feature.tileset.title;
 
-        let title = feature.name;
-        const configId = feature.imageryLayer["config_id"];
-        if (configId) {
-            title = this.getLayerName(configId);
-        }
+		if (tiltesetTitle) {
+			title = tiltesetTitle;
+		} else {
+			if (configId) {
+				title = this.getLayerName(configId);
+			}
+		}
 
-        const selectedLayer = this.map.getLayerById(configId);
-        if (selectedLayer?.config.disablePopup) return undefined;
+		const selectedLayer = this.map.getLayerById(configId);
+		if (selectedLayer?.config.disablePopup) return undefined;
 
-        return new FeatureInfo(title ? title : "-", records);
-    }
+		return new FeatureInfo(title, records);
+	}
 
-    private getCesium3DTileFeatureName(feature: Cesium.Cesium3DTileFeature) {
-        // We need to iterate all property names to find potential
-        // candidates, but since we prefer some property names
-        // over others, we store them in an indexed array
-        // and then use the first defined element in the array
-        // as the preferred choice.
+	private async pickImageryLayers(position: Cesium.Cartesian2): Promise<FeatureInfo | undefined> {
+		const pickRay = this.map.viewer.scene.camera.getPickRay(position);
+		if (!pickRay) return undefined;
+		const features = await this.map.viewer.scene.imageryLayers.pickImageryLayerFeatures(
+			pickRay,
+			this.map.viewer.scene
+		);
+		if (!features || features.length === 0) return undefined;
+		return this.imageryFeaturesToFeatureInfo(features);
+	}
 
-        let i;
-        const possibleNames = [];
-        const propertyNames = feature.getPropertyIds();
-        for (i = 0; i < propertyNames.length; i++) {
-            const propertyName = propertyNames[i];
-            if (/^name$/i.test(propertyName)) {
-                possibleNames[0] = feature.getProperty(propertyName);
-            } else if (/name/i.test(propertyName)) {
-                possibleNames[1] = feature.getProperty(propertyName);
-            } else if (/^title$/i.test(propertyName)) {
-                possibleNames[2] = feature.getProperty(propertyName);
-            } else if (/^(id|identifier)$/i.test(propertyName)) {
-                possibleNames[3] = feature.getProperty(propertyName);
-            } else if (/element/i.test(propertyName)) {
-                possibleNames[4] = feature.getProperty(propertyName);
-            } else if (/(id|identifier)$/i.test(propertyName)) {
-                possibleNames[5] = feature.getProperty(propertyName);
-            }
-        }
+	private imageryFeaturesToFeatureInfo(
+		features: Array<Cesium.ImageryLayerFeatureInfo>
+	): FeatureInfo | undefined {
+		if (!features || features.length === 0) {
+			return undefined;
+		}
 
-        const length = possibleNames.length;
-        for (i = 0; i < length; i++) {
-            const item = possibleNames[i];
-            if (Cesium.defined(item) && item !== "") {
-                return item;
-            }
-        }
+		const feature = features[0];
+		const properties = feature.properties;
+		const records = new Array<FeatureInfoRecord>();
 
-        if (feature.tileset?.config_id) {
-            const layerName = this.getLayerName(feature.tileset.config_id);
-            if (layerName) {
-                return layerName;
-            }
-        }
+		if (properties) {
+			const keys = Object.keys(properties);
+			keys.forEach((key) => {
+				records.push(new FeatureInfoRecord(key, properties[key]));
+			});
+		}
 
-        return "Feature Info";
-    }
+		let title = feature.name;
+		const configId = feature.imageryLayer["config_id"];
+		if (configId) {
+			title = this.getLayerName(configId);
+		}
 
-    private getLayerName(configId: string): string {
-        const layer = this.map.getLayerById(configId);
-        return layer.title ?? "";
-    }
+		const selectedLayer = this.map.getLayerById(configId);
+		if (selectedLayer?.config.disablePopup) return undefined;
+
+		return new FeatureInfo(title ? title : "-", records);
+	}
+
+	private getCesium3DTileFeatureName(feature: Cesium.Cesium3DTileFeature) {
+		// We need to iterate all property names to find potential
+		// candidates, but since we prefer some property names
+		// over others, we store them in an indexed array
+		// and then use the first defined element in the array
+		// as the preferred choice.
+
+		let i;
+		const possibleNames = [];
+		const propertyNames = feature.getPropertyIds();
+		for (i = 0; i < propertyNames.length; i++) {
+			const propertyName = propertyNames[i];
+			if (/^name$/i.test(propertyName)) {
+				possibleNames[0] = feature.getProperty(propertyName);
+			} else if (/name/i.test(propertyName)) {
+				possibleNames[1] = feature.getProperty(propertyName);
+			} else if (/^title$/i.test(propertyName)) {
+				possibleNames[2] = feature.getProperty(propertyName);
+			} else if (/^(id|identifier)$/i.test(propertyName)) {
+				possibleNames[3] = feature.getProperty(propertyName);
+			} else if (/element/i.test(propertyName)) {
+				possibleNames[4] = feature.getProperty(propertyName);
+			} else if (/(id|identifier)$/i.test(propertyName)) {
+				possibleNames[5] = feature.getProperty(propertyName);
+			}
+		}
+
+		const length = possibleNames.length;
+		for (i = 0; i < length; i++) {
+			const item = possibleNames[i];
+			if (Cesium.defined(item) && item !== "") {
+				return item;
+			}
+		}
+
+		if (feature.tileset?.config_id) {
+			const layerName = this.getLayerName(feature.tileset.config_id);
+			if (layerName) {
+				return layerName;
+			}
+		}
+
+		return "Feature Info";
+	}
+
+	private getLayerName(configId: string): string {
+		const layer = this.map.getLayerById(configId);
+		return layer.title ?? "";
+	}
 }

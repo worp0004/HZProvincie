@@ -73,6 +73,7 @@
 		}
 
 		layer.source.style = new Cesium.Cesium3DTileStyle({
+			defines: selectedTheme.defines,
 			color: {
 				conditions: newConditions
 			}

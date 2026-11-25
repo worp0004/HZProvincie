@@ -36,6 +36,8 @@
 	import MapToolConfigSwitcher from "./tools/MapToolConfigSwitcher/MapToolConfigSwitcher.svelte";
 	import MapToolFlooding from "./tools/MapToolFlooding/MapToolFlooding.svelte";
 	import MapToolZonalStatistics from "./tools/MapToolZonalStatistics/MapToolZonalStatistics.svelte";
+	import MapToolAnalysis from "./tools/MapToolAnalysis/MapToolAnalysis.svelte";
+	import MapToolPlaceBuilding from "./tools/MapToolPlaceBuilding/MapToolPlaceBuilding.svelte";
 
 	const settings = writable<any>({});
 	const enabledTools = writable<Array<string>>(new Array<string>());
@@ -57,6 +59,8 @@
 		"projects",
 		"bookmarks",
 		"measure",
+		"placeBuilding",
+		"analysis",
 		"isochrones"
 	]; // Standard order of top left tools in toolmenu
 
@@ -69,6 +73,8 @@
 		bookmarks: MapToolBookmark,
 		measure: MapToolCesiumMeasure,
 		isochrones: MapToolIsochrones,
+		analysis: MapToolAnalysis,
+		placeBuilding: MapToolPlaceBuilding,
 		zonalStatistics: MapToolZonalStatistics
 	};
 
